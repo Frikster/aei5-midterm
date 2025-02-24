@@ -23,6 +23,10 @@ COPY --chown=user . $HOME/app
 # RUN uv sync --frozen
 RUN uv sync
 
+RUN uv run python rag_service/test_env.py
+RUN uv run python rag_service/rag_pipeline.py
+RUN uv run python rag_service/synthetic_data.py
+
 # Expose the port
 EXPOSE 7860
 
