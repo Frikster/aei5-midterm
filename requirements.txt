@@ -1,8 +1,8 @@
-streamlit>=1.31.0
-langchain>=0.1.0
-langchain-anthropic>=0.1.0
-langchain-openai>=0.0.5
-langchain-community>=0.0.20
-qdrant-client>=1.7.0
-python-dotenv>=1.0.0
-airtable-python-wrapper>=0.19.0
+streamlit>=1.41.0
+langchain-community==0.3.14
+langchain-openai==0.2.14
+langchain-qdrant>=0.2.0
+langgraph==0.2.61
+unstructured>=0.14.8
+langchain-anthropic==0.3.7
+pyairtable>=2.3.0
