@@ -1,20 +1,13 @@
-import sys
 from pathlib import Path
 import streamlit as st
 import os
-
-# Add the parent directory to Python path so we can import from rag_service
-sys.path.append(str(Path(__file__).parent.parent))
 
 from rag_service.rag_pipeline import GrantSummaryPipeline
 
 def main():
     st.title("EA Funds Grant Summary Generator")
-    
-    # Modify vector store path for Hugging Face deployment
-    vector_store_path = Path(__file__).parent.parent / "vector_store"
-    
-    # Add a check for HF_SPACE environment variable
+
+    vector_store_path = Path(__file__).parent / "vector_store"
     if 'HF_SPACE' in os.environ:
         vector_store_path = Path("/data/vector_store")  # HF Spaces persistent storage
     

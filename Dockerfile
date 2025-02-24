@@ -1,4 +1,4 @@
-# Cannot get Streamlit working using Docker
+# Cannot get Streamlit working using Docker. Persistent ModuleNotFoundError: No module named 'streamlit.web'
 
 # Get a distribution that has uv already installed
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
