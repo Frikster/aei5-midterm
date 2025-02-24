@@ -22,9 +22,7 @@ COPY --chown=user . $HOME/app
 # Install the dependencies
 # RUN uv sync --frozen
 RUN uv sync
-
-# Install streamlit with pip to ensure CLI tool is properly installed
-RUN uv pip install streamlit
+RUN . .venv/bin/activate && uv pip install streamlit
 
 # Add current directory to PYTHONPATH before running scripts
 ENV PYTHONPATH=$HOME/app:$PYTHONPATH
@@ -38,4 +36,4 @@ EXPOSE 7860
 # Use the start script as the entry point
 # CMD ["./start.sh"]
 # # Run the app
-CMD ["streamlit", "run", "streamlit/app.py", "--server.address", "0.0.0.0", "--server.port", "7860"]
+CMD ["uv", "run" ,"streamlit", "run", "streamlit/app.py", "--server.address", "0.0.0.0", "--server.port", "7860"]
