@@ -23,6 +23,9 @@ COPY --chown=user . $HOME/app
 # RUN uv sync --frozen
 RUN uv sync
 
+# Add current directory to PYTHONPATH before running scripts
+ENV PYTHONPATH=$HOME/app:$PYTHONPATH
+
 RUN uv run python rag_service/test_env.py
 RUN uv run python rag_service/rag_pipeline.py
 RUN uv run python rag_service/synthetic_data.py
