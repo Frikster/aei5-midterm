@@ -5,3 +5,17 @@ langgraph==0.2.61
 unstructured>=0.14.8
 langchain-anthropic==0.3.7
 pyairtable>=2.3.0
+
+# Presidio: https://huggingface.co/spaces/presidio/presidio_demo/blob/main/requirements.txt
+# presidio-analyzer[transformers]
+# presidio-analyzer[stanza]
+# presidio-anonymizer
+# streamlit
+# streamlit-tags
+# pandas
+# python-dotenv
+# st-annotated-text
+# torch
+# flair
+# openai
+# azure-ai-textanalytics

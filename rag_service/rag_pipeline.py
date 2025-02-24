@@ -8,6 +8,11 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.schema.runnable import RunnablePassthrough
 from tqdm import tqdm
 from pathlib import Path
+from typing import TypedDict, Annotated
+from langgraph.graph import StateGraph, END
+from langchain_core.output_parsers import StrOutputParser
+from langchain_community.tools.tavily_search import TavilySearchResults
+
 
 # Try relative import first (for when used as a package)
 try:
@@ -17,6 +22,13 @@ try:
 except ImportError:
     from data_loader import load_grants_from_airtable
     from config import get_anthropic_api_key, EMBEDDING_MODEL, LLM_MODEL
+
+class PrivacyState(TypedDict):
+    messages: Annotated[list, "messages"]
+    grant_id: str | None
+    context: str | None
+    summary: str
+    privacy_issues: list[str]
 
 class GrantSummaryPipeline:
     def __init__(self, persist_dir: str = "vector_store", force_disable_check_same_thread: bool = False):
@@ -111,6 +123,23 @@ class GrantSummaryPipeline:
             """),
             ("user", "Context: {context}\n\nGenerate a summary of this grant:"),
         ])
+        
+        self.workflow = StateGraph(PrivacyState)
+        self.workflow.add_node("generate_summary", self.generate_summary)
+        self.workflow.add_node("check_privacy", self.check_privacy)
+        self.workflow.add_node("sanitize", self.sanitize_summary)
+        self.workflow.add_conditional_edges(
+            "generate_summary",
+            self.should_check_privacy,
+            {
+                "check_privacy": "check_privacy",
+                "end": END
+            }
+        )
+        self.workflow.add_edge("check_privacy", "sanitize")
+        self.workflow.add_edge("sanitize", END)
+        self.workflow.set_entry_point("generate_summary")
+        self.agent = self.workflow.compile()
 
     def load_grants(self):
         """Load grants from Airtable and index them in the vector store"""
@@ -135,13 +164,17 @@ class GrantSummaryPipeline:
                 self.vectorstore.add_documents(batch)
             print("Added all chunks to vector store")
         
-    def generate_summary(self, grant_id: str | None = None, context: str | None = None) -> str:
+    # def generate_summary(self, grant_id: str | None = None, context: str | None = None) -> str:
+    def generate_summary(self, state: PrivacyState) -> PrivacyState:
         """Generate a summary for a specific grant
         
         Args:
             grant_id: ID of the grant to summarize. Required if context not provided.
             context: Direct context to use instead of retrieval. Optional.
         """
+        grant_id = state["grant_id"]
+        context = state["context"]
+        
         if grant_id is None and context is None:
             raise ValueError("Either grant_id or context must be provided")
         
@@ -184,9 +217,96 @@ class GrantSummaryPipeline:
         # The retriever will still use the filter to get relevant chunks
         
         # since raw string the string will pass to everything in chain
-        response = chain.invoke("Add more quantitative metrics")
-        return response.content
+        response = chain.invoke("")
+        state["context"] = context
+        state["summary"] = response.content
+        return state
+        # return response.content
 
+    def should_check_privacy(self, state: PrivacyState) -> str:
+        """Determine if privacy check is needed based on summary content"""
+        if not state.get("summary"):
+            return "end"  # No summary generated
+        
+        # Check if summary might contain private info
+        check_chain = ChatPromptTemplate.from_messages([
+            ("system", """You are a privacy assessment agent. 
+            Analyze the summary and determine if it might contain private information like:
+            - Institution names
+            - People names
+            - Specific dates
+            - Location details
+            
+            Respond with only 'check' or 'clean'."""),
+            ("user", "{summary}")
+        ]) | self.llm | StrOutputParser()
+        
+        result = check_chain.invoke({"summary": state["summary"]})
+        print("should_check_privacy: ", result)
+        return "check_privacy" if result.strip().lower() == "check" else "end"
+    
+    def check_privacy(self, state: PrivacyState) -> PrivacyState:
+        """Check if summary contains private information using Tavily"""
+        print("check_privacy")
+        print("state", state)
+        tavily = TavilySearchResults(max_results=3)        
+        search_results = tavily.invoke(state["summary"])
+        
+        # Have LLM analyze search results for privacy concerns
+        privacy_chain = ChatPromptTemplate.from_messages([
+            ("system", """You are a privacy analyst. Check if the grant summary contains 
+            identifying information that matches public records. Look for:
+            - Institution names
+            - Researcher names
+            - Specific dates
+            - Location details
+            List any privacy concerns found."""),
+            ("user", """Summary: {summary}
+            Search Results: {results}
+            List privacy issues if found:""")
+        ]) | self.llm | StrOutputParser()
+        
+        issues = privacy_chain.invoke({
+            "summary": state["summary"],
+            "results": search_results
+        })
+        
+        state["privacy_issues"] = issues.split("\n") if issues.strip() else []
+        return state
+    
+    def sanitize_summary(self, state: PrivacyState) -> PrivacyState:
+        """Sanitize summary if privacy issues found"""
+        if not state["privacy_issues"]:
+            return state
+            
+        sanitize_chain = ChatPromptTemplate.from_messages([
+            ("system", """You are a privacy protection agent. Rewrite the summary to remove:
+            - Institution names (use "the institution")
+            - Specific people's names (use "the researcher")
+            - Dates (use relative time periods)
+            - Locations that could identify participants
+            Maintain technical accuracy while removing identifying details."""),
+            ("user", """Original summary: {summary}
+            Privacy issues found: {issues}
+            Rewrite to address these privacy concerns:""")
+        ]) | self.llm | StrOutputParser()
+        
+        state["summary"] = sanitize_chain.invoke({
+            "summary": state["summary"],
+            "issues": "\n".join(state["privacy_issues"])
+        })
+        return state
+    
+    def run_agent(self, grant_id):
+        result = self.agent.invoke({
+            "messages": [],
+            "grant_id": grant_id,
+            "context": None,
+            "summary": "",
+            "privacy_issues": []
+        })
+        return result["summary"]
+        
 
 def main():
     # Test the pipeline
@@ -200,8 +320,8 @@ def main():
     else:
         print(f"Vector store contains {collection_info.points_count} points")
     
-    # Test with a sample grant ID
-    test_ids = ["recJYbsdzFWrtRioh", "reckdtWlsWmQ1QpcQ"]
+    # Test with a sample grant ID (rec4wLvMmnhpBMFtg summary has a privacy issue detected)
+    test_ids = ["recJYbsdzFWrtRioh", "reckdtWlsWmQ1QpcQ", "rec4wLvMmnhpBMFtg"]
     for grant_id in test_ids:
         print(f"\nGenerating summary for grant {grant_id}:")
         summary = pipeline.generate_summary(grant_id)

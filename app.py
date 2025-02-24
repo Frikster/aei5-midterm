@@ -82,7 +82,8 @@ def main():
     if st.button("Generate Summary"):
         with st.spinner("Generating summary..."):
             try:
-                summary = st.session_state.pipeline.generate_summary(grant_id=grant_id)
+                # summary = st.session_state.pipeline.generate_summary(grant_id=grant_id)
+                summary = st.session_state.pipeline.run_agent(grant_id=grant_id)
                 st.write("### Summary")
                 st.write(summary)
             except Exception as e:
