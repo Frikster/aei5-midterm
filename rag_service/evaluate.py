@@ -13,7 +13,12 @@ from langchain_anthropic import ChatAnthropic
 from ragas.llms import LangchainLLMWrapper
 import json
 from pathlib import Path
-from rag_service.config import ANTHROPIC_API_KEY, LLM_MODEL
+# Try relative import first
+try:
+    from .config import ANTHROPIC_API_KEY, LLM_MODEL
+# Fall back to absolute import
+except ImportError:
+    from config import ANTHROPIC_API_KEY, LLM_MODEL
 
 def load_evaluation_dataset():
     """Load and format the evaluation dataset for RAGAS"""

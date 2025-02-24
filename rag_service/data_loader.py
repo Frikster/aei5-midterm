@@ -1,11 +1,22 @@
 from langchain_community.document_loaders import AirtableLoader
-from rag_service.config import (
-    AIRTABLE_API_KEY,
-    AIRTABLE_GRANTS_BASE_ID,
-    AIRTABLE_GRANTS_TABLE_ID,
-    AIRTABLE_GRANTS_PUBLISHED_PUBLIC_VIEW,
-    FUND_ID_TO_FUND_STRING
-)
+# Try relative import first
+try:
+    from .config import (
+        AIRTABLE_API_KEY,
+        AIRTABLE_GRANTS_BASE_ID,
+        AIRTABLE_GRANTS_TABLE_ID,
+        AIRTABLE_GRANTS_PUBLISHED_PUBLIC_VIEW,
+        FUND_ID_TO_FUND_STRING
+    )
+# Fall back to absolute import
+except ImportError:
+    from config import (
+        AIRTABLE_API_KEY,
+        AIRTABLE_GRANTS_BASE_ID,
+        AIRTABLE_GRANTS_TABLE_ID,
+        AIRTABLE_GRANTS_PUBLISHED_PUBLIC_VIEW,
+        FUND_ID_TO_FUND_STRING
+    )
 from tqdm import tqdm
 
 def load_grants_from_airtable():

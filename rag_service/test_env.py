@@ -1,7 +1,12 @@
 import sys
 from anthropic import Anthropic
 from openai import OpenAI
-from rag_service.config import ANTHROPIC_API_KEY, OPENAI_API_KEY, EMBEDDING_MODEL, LLM_MODEL
+# Try relative import first
+try:
+    from .config import ANTHROPIC_API_KEY, OPENAI_API_KEY, EMBEDDING_MODEL, LLM_MODEL
+# Fall back to absolute import
+except ImportError:
+    from config import ANTHROPIC_API_KEY, OPENAI_API_KEY, EMBEDDING_MODEL, LLM_MODEL
 
 def test_environment():
     print("Testing Python environment and dependencies...")

@@ -3,7 +3,14 @@ import json
 from pathlib import Path
 from dataclasses import dataclass
 from langchain.schema import Document
-from rag_service.rag_pipeline import GrantSummaryPipeline
+# Try relative imports first
+try:
+    from .rag_pipeline import GrantSummaryPipeline
+    from .data_loader import load_grants_from_airtable
+# Fall back to absolute imports
+except ImportError:
+    from rag_pipeline import GrantSummaryPipeline
+    from data_loader import load_grants_from_airtable
 
 @dataclass
 class EvaluationExample:
@@ -132,7 +139,6 @@ class GrantEvaluationGenerator:
 
 def main():
     # Load grants from Airtable
-    from data_loader import load_grants_from_airtable
     grants = load_grants_from_airtable()
     
     # Create evaluation dataset

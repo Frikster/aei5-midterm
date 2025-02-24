@@ -8,13 +8,15 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.schema.runnable import RunnablePassthrough
 from tqdm import tqdm
 from pathlib import Path
-from rag_service.data_loader import load_grants_from_airtable
 
-from rag_service.config import (
-    ANTHROPIC_API_KEY, 
-    LLM_MODEL, 
-    EMBEDDING_MODEL,
-)
+# Try relative import first (for when used as a package)
+try:
+    from .data_loader import load_grants_from_airtable
+    from .config import ANTHROPIC_API_KEY, EMBEDDING_MODEL, LLM_MODEL
+# Fall back to absolute import (for when run directly)
+except ImportError:
+    from data_loader import load_grants_from_airtable
+    from config import ANTHROPIC_API_KEY, EMBEDDING_MODEL, LLM_MODEL
 
 class GrantSummaryPipeline:
     def __init__(self, persist_dir: str = "vector_store", force_disable_check_same_thread: bool = False):

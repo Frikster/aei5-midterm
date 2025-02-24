@@ -12,8 +12,14 @@ from ragas.metrics import LLMContextRecall, Faithfulness, FactualCorrectness, Re
 from ragas import evaluate
 import wandb
 
-from rag_service.synthetic_data import EvaluationExample
-from rag_service.rag_pipeline import GrantSummaryPipeline
+# Try relative imports first
+try:
+    from .synthetic_data import EvaluationExample
+    from .rag_pipeline import GrantSummaryPipeline
+# Fall back to absolute imports
+except ImportError:
+    from synthetic_data import EvaluationExample
+    from rag_pipeline import GrantSummaryPipeline
 
 class EmbeddingTrainer:
     def __init__(self, base_model: str = "Snowflake/snowflake-arctic-embed-l"):
