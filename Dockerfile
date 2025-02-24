@@ -23,6 +23,9 @@ COPY --chown=user . $HOME/app
 # RUN uv sync --frozen
 RUN uv sync
 
+# Install streamlit with pip to ensure CLI tool is properly installed
+RUN pip install streamlit
+
 # Add current directory to PYTHONPATH before running scripts
 ENV PYTHONPATH=$HOME/app:$PYTHONPATH
 
@@ -31,7 +34,6 @@ RUN chmod +x start.sh
 
 # Expose the port
 EXPOSE 7860
-
 
 # Use the start script as the entry point
 CMD ["./start.sh"]
