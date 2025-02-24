@@ -15,10 +15,10 @@ import json
 from pathlib import Path
 # Try relative import first
 try:
-    from .config import ANTHROPIC_API_KEY, LLM_MODEL
+    from .config import get_anthropic_api_key, LLM_MODEL
 # Fall back to absolute import
 except ImportError:
-    from config import ANTHROPIC_API_KEY, LLM_MODEL
+    from config import get_anthropic_api_key, LLM_MODEL
 
 def load_evaluation_dataset():
     """Load and format the evaluation dataset for RAGAS"""
@@ -56,8 +56,8 @@ def evaluate_summaries():
     
     # Initialize evaluator LLM as in example
     evaluator_llm = LangchainLLMWrapper(
-            ChatAnthropic(api_key=ANTHROPIC_API_KEY, model=LLM_MODEL)
-        )
+        ChatAnthropic(api_key=get_anthropic_api_key(), model=LLM_MODEL)
+    )
     
     # Configure timeout as in example
     custom_run_config = RunConfig(timeout=360)

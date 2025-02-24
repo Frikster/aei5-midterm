@@ -5,32 +5,33 @@ import getpass
 # Load environment variables from .env file
 load_dotenv()
 
-# Required API keys
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+# Model configurations (these are fine as constants)
+EMBEDDING_MODEL = "text-embedding-3-small"
+LLM_MODEL = "claude-3-5-sonnet-latest"
 
-# Model configurations
-EMBEDDING_MODEL = "text-embedding-3-small"  # OpenAI's embedding model (Anthropic doesn't offer their own)
-LLM_MODEL = "claude-3-5-sonnet-latest"     # Claude model for summary generation
+def get_required_env_var(var_name: str) -> str:
+    """Get required environment variable or raise error."""
+    value = os.getenv(var_name)
+    if not value:
+        raise ValueError(f"{var_name} not found in environment variables")
+    return value
 
-# Check for required environment variables
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY not found in environment variables")
-if not ANTHROPIC_API_KEY:
-    raise ValueError("ANTHROPIC_API_KEY not found in environment variables")
+# API key getters
+def get_openai_api_key(): return get_required_env_var("OPENAI_API_KEY")
+def get_anthropic_api_key(): return get_required_env_var("ANTHROPIC_API_KEY")
+def get_airtable_api_key(): return get_required_env_var("AIRTABLE_API_KEY")
 
-# Add Airtable configuration
-AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
-AIRTABLE_GRANTS_BASE_ID = os.getenv("AIRTABLE_GRANTS_BASE_ID")
-AIRTABLE_GRANTS_TABLE_ID = os.getenv("AIRTABLE_GRANTS_TABLE_ID")
-AIRTABLE_GRANTS_PUBLISHED_PUBLIC_VIEW = os.getenv("AIRTABLE_GRANTS_PUBLISHED_PUBLIC_VIEW_NO_ANONYMOUS")
+# Airtable config getters
+def get_airtable_grants_base_id(): return get_required_env_var("AIRTABLE_GRANTS_BASE_ID")
+def get_airtable_grants_table_id(): return get_required_env_var("AIRTABLE_GRANTS_TABLE_ID")
+def get_airtable_grants_published_view(): return get_required_env_var("AIRTABLE_GRANTS_PUBLISHED_PUBLIC_VIEW_NO_ANONYMOUS")
 
-# Airtable Fund IDs
-FUND_ID_TO_FUND_STRING = {
-    os.getenv("AIRTABLE_LTFF_ID"): "LTFF",
-    os.getenv("AIRTABLE_EAIF_ID"): "EAIF",
-    os.getenv("AIRTABLE_AWF_ID"): "AWF"
-}
+def get_fund_id_mapping():
+    return {
+        os.getenv("AIRTABLE_LTFF_ID"): "LTFF",
+        os.getenv("AIRTABLE_EAIF_ID"): "EAIF",
+        os.getenv("AIRTABLE_AWF_ID"): "AWF"
+    }
 
 # Interactive API key entry (jupyter notebook)
 # os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter Your OpenAI API Key: ")

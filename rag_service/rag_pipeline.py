@@ -12,18 +12,18 @@ from pathlib import Path
 # Try relative import first (for when used as a package)
 try:
     from .data_loader import load_grants_from_airtable
-    from .config import ANTHROPIC_API_KEY, EMBEDDING_MODEL, LLM_MODEL
+    from .config import get_anthropic_api_key, EMBEDDING_MODEL, LLM_MODEL
 # Fall back to absolute import (for when run directly)
 except ImportError:
     from data_loader import load_grants_from_airtable
-    from config import ANTHROPIC_API_KEY, EMBEDDING_MODEL, LLM_MODEL
+    from config import get_anthropic_api_key, EMBEDDING_MODEL, LLM_MODEL
 
 class GrantSummaryPipeline:
     def __init__(self, persist_dir: str = "vector_store", force_disable_check_same_thread: bool = False):
         # Initialize models
         self.llm = ChatAnthropic(
             model=LLM_MODEL,
-            anthropic_api_key=ANTHROPIC_API_KEY
+            anthropic_api_key=get_anthropic_api_key()
         )
         self.embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
         
