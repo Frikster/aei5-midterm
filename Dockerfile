@@ -36,6 +36,6 @@ RUN chmod +x start.sh
 EXPOSE 7860
 
 # Use the start script as the entry point
-CMD ["./start.sh"]
+# CMD ["./start.sh"]
 # # Run the app
-# CMD ["uv", "run", "streamlit", "run", "streamlit/app.py", "--server.address", "0.0.0.0", "--server.port", "7860"]
+CMD ["uv", "run", "streamlit", "run", "streamlit/app.py", "--server.address", "0.0.0.0", "--server.port", "7860"]
