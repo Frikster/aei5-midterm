@@ -66,7 +66,7 @@ def main():
                     rag_service.rag_pipeline.tqdm = __import__('tqdm').tqdm
                     progress_bar.empty()
                 
-                st.success(f"Loaded grants into vector store.")
+                st.success("Loaded grants into vector store.")
             else:
                 st.info(f"Vector store contains {collection_info.points_count} points")
             
