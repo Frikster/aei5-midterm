@@ -27,4 +27,4 @@ RUN uv sync
 EXPOSE 7860
 
 # Run the app
-CMD ["uv", "run", "streamlit", "run", "streamlit/app.py", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uv", "run", "streamlit", "run", "streamlit/app.py", "--server.address", "0.0.0.0", "--server.port", "7860"]
