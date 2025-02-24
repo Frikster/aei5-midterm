@@ -169,3 +169,15 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Mac
+.DS_Store
+
+# Project-specific
+llm/
+rag-example-code/
+vector_store/
+fine_tuned_embeddings/
+
+# make sure not to accidentally commit evaluation data
+*.json

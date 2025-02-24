@@ -1,0 +1,33 @@
+[project]
+name = "eafunds-rag"
+version = "0.1.0"
+description = "RAG system for EA Funds grant summaries"
+requires-python = ">=3.13"
+dependencies = [
+    # Dependencies taken from RAGAS eval example
+
+    "jupyter>=1.1.1",
+    "langchain-cohere>=0.4.2",
+    "langchain-community==0.3.14",
+    "langchain-openai==0.2.14",
+    "langchain-qdrant>=0.2.0",
+    "langgraph==0.2.61",    
+    "nltk>=3.9.1",
+    "numpy>=2.2.2",
+    "ragas==0.2.10",
+    "unstructured>=0.14.8",
+
+    # Additional dependencies necesarry
+
+    "langchain-anthropic==0.3.7",
+    "pyairtable>=2.3.0",
+
+    ## For fine-tuning
+
+    "sentence-transformers>=3.4.1",
+    "transformers[torch]>=4.48.3",
+    "wandb>=0.19.6",
+
+    ## For Streamlit interface
+    "streamlit>=1.41.0",
+]
