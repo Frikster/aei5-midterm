@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 import streamlit as st
-from qdrant_client import QdrantClient
 import os
 
 # Add the parent directory to Python path so we can import from rag_service
