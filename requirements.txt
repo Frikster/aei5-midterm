@@ -5,6 +5,7 @@ langgraph==0.2.61
 unstructured>=0.14.8
 langchain-anthropic==0.3.7
 pyairtable>=2.3.0
+ragas==0.2.10
 
 # Presidio: https://huggingface.co/spaces/presidio/presidio_demo/blob/main/requirements.txt
 # presidio-analyzer[transformers]
