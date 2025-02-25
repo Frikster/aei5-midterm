@@ -1,6 +1,10 @@
+# This can only be run on Colab
+
 from typing import List
 from pathlib import Path
 import json
+import time
+import random
 from sentence_transformers import SentenceTransformer, InputExample
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -9,17 +13,9 @@ from sentence_transformers.evaluation import InformationRetrievalEvaluator
 from datasets import Dataset
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import LLMContextRecall, Faithfulness, FactualCorrectness, ResponseRelevancy, ContextEntityRecall, NoiseSensitivity
-from ragas import evaluate
+from ragas import evaluate, RunConfig
 import wandb
-
-# Try relative imports first
-try:
-    from .synthetic_data import EvaluationExample
-    from .rag_pipeline import GrantSummaryPipeline
-# Fall back to absolute imports
-except ImportError:
-    from synthetic_data import EvaluationExample
-    from rag_pipeline import GrantSummaryPipeline
+from tenacity import retry, wait_exponential, stop_after_attempt
 
 class EmbeddingTrainer:
     def __init__(self, base_model: str = "Snowflake/snowflake-arctic-embed-l"):
@@ -125,7 +121,7 @@ def main():
     wandb.init(mode="disabled")
     
     # Load existing evaluation dataset
-    with Path("evaluation_dataset.json").open() as f:
+    with Path("/content/drive/MyDrive/AIE5/evaluation_dataset-golden.json").open() as f:
         eval_data = [EvaluationExample(**example) for example in json.load(f)]
     print(f"Loaded {len(eval_data)} evaluation examples")
 
@@ -142,96 +138,111 @@ def main():
         "fine_tuned_embeddings",
         evaluator=evaluator
     )
-    
-    pipeline = GrantSummaryPipeline()
-    
-    # Run RAG Pipeline using OpenAI embeddings
-    print("Running Anthropic model RAG pipeline...")
-    base_openai_dataset = []
-    for example in tqdm(eval_data, desc="Processing base model examples"):
-        if "Insufficient context" not in example.golden_summary:
-            response = pipeline.generate_summary(grant_id=example.grant_id)
-            base_openai_dataset.append({
-                "question": "Question not used yet", # TODO
+
+    @retry(wait=wait_exponential(multiplier=1, min=4, max=60), stop=stop_after_attempt(5))
+    def process_example_with_retry(pipeline, example, desc):
+        """Process a single example with retry logic"""
+        try:
+            response = pipeline.run_agent(grant_id=example.grant_id)
+            # Add jitter to avoid synchronized retries
+            time.sleep(random.uniform(2, 4))
+            return {
+                "question": "Question not used yet",  # TODO
                 "context": example.original_text,
                 "answer": response,
                 "ground_truth": example.golden_summary,
                 "retrieved_contexts": [example.original_text]  # For now, using full context
-            })
+            }
+        except Exception as e:
+            print(f"Error processing example: {str(e)}")
+            raise  # Re-raise for retry
+
+    # Run RAG Pipeline using OpenAI embeddings
+    print("Running with openAI embeddings...")
+    base_openai_dataset = []
+    for example in tqdm(eval_data, desc="Processing base model examples"):
+        if "Insufficient context" not in example.golden_summary:
+            result = process_example_with_retry(pipeline, example, "base model")
+            base_openai_dataset.append(result)
     
     # Run Snowflake base model RAG pipeline before fine-tuning
-    print("Running Snowflake base model RAG pipeline...")
+    print("Running with Snowflake base embeddings...")
     pipeline.embeddings = trainer.model
     base_snowflake_dataset = []
     for example in tqdm(eval_data, desc="Processing snowflake base model examples"):
         if "Insufficient context" not in example.golden_summary:
-            response = pipeline.generate_summary(grant_id=example.grant_id)
-            base_snowflake_dataset.append({
-                "question": "Question not used yet", # TODO
-                "context": example.original_text,
-                "answer": response,
-                "ground_truth": example.golden_summary,
-                "retrieved_contexts": [example.original_text]  # For now, using full context
-            })
+            result = process_example_with_retry(pipeline, example, "snowflake base")
+            base_snowflake_dataset.append(result)
     
     # Run fine-tuned model RAG pipeline
-    print("\nRunning Snowflake fine-tuned model RAG pipeline...")
+    print("Running with Snowflake fine-tuned embeddings...")
     pipeline.embeddings = fine_tuned_model
     fine_tuned_dataset = []
     for example in tqdm(eval_data, desc="Processing fine-tuned model examples"):
         if "Insufficient context" not in example.golden_summary:
-            response = pipeline.generate_summary(grant_id=example.grant_id)
-            fine_tuned_dataset.append({
-                "question": "Question not used yet", # TODO
-                "context": example.original_text,
-                "answer": response,
-                "ground_truth": example.golden_summary,
-                "retrieved_contexts": [example.original_text]  # For now, using full context
-            })
-    
-    
+            result = process_example_with_retry(pipeline, example, "fine-tuned")
+            fine_tuned_dataset.append(result)
     
     # Convert to RAGAS evaluation datasets
-    base_anthropic_evaluation_dataset = Dataset.from_list(base_openai_dataset)
+    base_openai_evaluation_dataset = Dataset.from_list(base_openai_dataset)
     base_snowflake_evaluation_dataset = Dataset.from_list(base_snowflake_dataset)
     fine_tuned_evaluation_dataset = Dataset.from_list(fine_tuned_dataset)
     
     # Run RAGAS evaluations
     evaluator_llm = LangchainLLMWrapper(pipeline.llm)
     
-    base_anthropic_results = evaluate(
-        dataset=base_anthropic_evaluation_dataset,
+    custom_run_config = RunConfig(timeout=360)
+    base_openai_results = evaluate(
+        dataset=base_openai_evaluation_dataset,
         metrics=[LLMContextRecall(), Faithfulness(), FactualCorrectness(), 
                 ResponseRelevancy(), ContextEntityRecall(), NoiseSensitivity()],
-        llm=evaluator_llm
+        llm=evaluator_llm,
+        run_config=custom_run_config
     )
     base_snowflake_results = evaluate(
         dataset=base_snowflake_evaluation_dataset,
         metrics=[LLMContextRecall(), Faithfulness(), FactualCorrectness(), 
                 ResponseRelevancy(), ContextEntityRecall(), NoiseSensitivity()],
-        llm=evaluator_llm
+        llm=evaluator_llm,
+        run_config=custom_run_config
     )
     fine_tuned_results = evaluate(
         dataset=fine_tuned_evaluation_dataset,
         metrics=[LLMContextRecall(), Faithfulness(), FactualCorrectness(), 
                 ResponseRelevancy(), ContextEntityRecall(), NoiseSensitivity()],
-        llm=evaluator_llm
+        llm=evaluator_llm,
+        run_config=custom_run_config
     )
     
     # Compare results
+    # Write results to file
+    with open("fine_tuning_results.txt", "w") as f:
+        f.write("RAGAS Metric Comparison:\n")
+        f.write("------------------------\n")
+        for metric in base_openai_results._repr_dict:
+            openai = base_openai_results._repr_dict[metric]
+            snowflake = base_snowflake_results._repr_dict[metric]
+            fine = fine_tuned_results._repr_dict[metric]
+            f.write(f"{metric}:\n")
+            f.write(f"  Base OpenAI: {openai:.3f}\n")
+            f.write(f"  Base Snowflake: {snowflake:.3f}\n") 
+            f.write(f"  Fine-tuned:     {fine:.3f}\n")
+            f.write("\n")
+            
+    # Also print to console
     print("\nRAGAS Metric Comparison:")
     print("------------------------")
-    for metric in base_anthropic_results._repr_dict:
-        anthropic = base_anthropic_results._repr_dict[metric]
+    for metric in base_openai_results._repr_dict:
+        openai = base_openai_results._repr_dict[metric]
         snowflake = base_snowflake_results._repr_dict[metric]
         fine = fine_tuned_results._repr_dict[metric]
         print(f"{metric}:")
-        print(f"  Base Anthropic: {anthropic:.3f}")
+        print(f"  Base OpenAI: {openai:.3f}")
         print(f"  Base Snowflake: {snowflake:.3f}")
         print(f"  Fine-tuned:     {fine:.3f}")
-        print(f"  Snowflake {'better' if snowflake > anthropic else 'worse'} than Anthropic by: {abs((snowflake-anthropic)/anthropic)*100:.1f}%")
-        print(f"  Improvement vs Anthropic: {((fine-anthropic)/anthropic)*100:.1f}%")
-        print(f"  Improvement vs Snowflake: {((fine-snowflake)/snowflake)*100:.1f}%")
+        # print(f"  Snowflake {'better' if snowflake > openai else 'worse'} than OpenAI by: {abs((snowflake-openai)/openai)*100:.1f}%")
+        # print(f"  Improvement vs OpenAI: {((fine-openai)/openai)*100:.1f}%")
+        # print(f"  Improvement vs Snowflake: {((fine-snowflake)/snowflake)*100:.1f}%")
 
 if __name__ == "__main__":
     main()
