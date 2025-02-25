@@ -1,8 +1,12 @@
 from pathlib import Path
 import streamlit as st
 import os
+import json
 
 from rag_service.rag_pipeline import GrantSummaryPipeline
+from rag_service.data_loader import load_grants_from_airtable
+from rag_service.synthetic_data import GrantEvaluationGenerator
+from rag_service.evaluate import evaluate_ragas
 
 @st.cache_resource
 def get_pipeline(vector_store_path):
@@ -77,6 +81,67 @@ def main():
         
         st.session_state.pipeline = pipeline
         
+        # Add evaluation section
+        st.write("## Evaluation")
+        eval_col1, eval_col2 = st.columns(2)
+        
+        with eval_col1:
+            if st.button("Generate Synthetic Dataset"):
+                with st.spinner("Generating synthetic dataset..."):
+                    try:
+                        # Load grants directly from Airtable
+                        grants = load_grants_from_airtable()
+                        
+                        generator = GrantEvaluationGenerator(rag_pipeline=pipeline)
+                        evaluation_examples = generator.create_evaluation_dataset(grants)
+                        
+                        # Save dataset
+                        synthetic_output_path = Path(__file__).parent / "evaluation_dataset.json"
+                        with synthetic_output_path.open("w") as f:
+                            json.dump(
+                                [vars(example) for example in evaluation_examples],
+                                f,
+                                indent=2
+                            )
+                        st.success(f"Generated and saved {len(evaluation_examples)} evaluation examples!")
+                    except Exception as e:
+                        st.error(f"Error generating dataset: {str(e)}")
+        
+        with eval_col2:
+            if st.button("Run Evaluation"):
+                with st.spinner("Running evaluation..."):
+                    try:
+                        # Try to load from file
+                        dataset_path = Path(__file__).parent / "evaluation_dataset.json"
+                        if not dataset_path.exists():
+                            st.error("No evaluation dataset found. Generate one first!")
+                            return
+                        
+                        # Run RAGAS evaluation
+                        ragas_results = evaluate_ragas()
+
+                        # Convert results to pandas DataFrame
+                        results_df = ragas_results.to_pandas()
+                        ragas_eval_output_path = Path(__file__).parent / "ragas_eval_output_path.json"
+                        results_df.to_json(ragas_eval_output_path, orient="records", indent=2)
+                        print(f"\nSaved detailed results to {ragas_eval_output_path}")
+                        
+                        # Display RAGAS results
+                        st.write("### RAGAS Evaluation Results")
+                        for metric_name, metric_value in ragas_results._repr_dict.items():
+                            st.metric(metric_name, f"{metric_value:.3f}")
+                        
+                        # # Run custom evaluation
+                        # custom_results = evaluate_custom(pipeline)
+                        
+                        # # Display custom results
+                        # st.write("### Custom Evaluation Results")
+                        # for metric, score in custom_results.items():
+                        #     st.metric(metric.replace("custom_", ""), f"{score:.2%}")
+                            
+                    except Exception as e:
+                        st.error(f"Error running evaluation: {str(e)}")
+
     except Exception as e:
         st.error(f"Error initializing pipeline: {str(e)}")
         return

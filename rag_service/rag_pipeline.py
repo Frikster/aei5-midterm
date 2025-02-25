@@ -172,6 +172,8 @@ class GrantSummaryPipeline:
             grant_id: ID of the grant to summarize. Required if context not provided.
             context: Direct context to use instead of retrieval. Optional.
         """
+        print("generate_summary")
+        print("state", state)
         grant_id = state["grant_id"]
         context = state["context"]
         
@@ -182,42 +184,41 @@ class GrantSummaryPipeline:
             # Use provided context directly
             chain = self.prompt | self.llm
             response = chain.invoke({"context": context})
-            return response.content
-        
-        # Original retrieval logic for grant_id
-        retriever = self.vectorstore.as_retriever(
-            # "similarity" search finds closest vector matches
-            # Other options include:
-            # - "mmr": Maximum Marginal Relevance (balances relevance & diversity)
-            # - "similarity_score_threshold": Only returns results above score
-            # We use similarity because grant summaries need precise context matching
-            search_type="similarity",
-            search_kwargs={
-                "k": float("inf"),  # Return all chunks with the grant_id
-                "filter": models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="metadata.grant_id",
-                            match=models.MatchValue(value=grant_id)
-                        )
-                    ]
-                )
-            }
-        )
-        
-        chain = (
-            {"context": retriever, "question": RunnablePassthrough()}  # TODO: question needs to be added to prompt
-            | self.prompt 
-            | self.llm
-        )
-        
-        # TODO: followup questions wil need to repass entire conversation through chain.
-        # TODO: question here does not matter at all yet
-        # Generate summary by passing empty string as query
-        # The retriever will still use the filter to get relevant chunks
-        
-        # since raw string the string will pass to everything in chain
-        response = chain.invoke("")
+        else:
+            # Original retrieval logic for grant_id
+            retriever = self.vectorstore.as_retriever(
+                # "similarity" search finds closest vector matches
+                # Other options include:
+                # - "mmr": Maximum Marginal Relevance (balances relevance & diversity)
+                # - "similarity_score_threshold": Only returns results above score
+                # We use similarity because grant summaries need precise context matching
+                search_type="similarity",
+                search_kwargs={
+                    "k": float("inf"),  # Return all chunks with the grant_id
+                    "filter": models.Filter(
+                        must=[
+                            models.FieldCondition(
+                                key="metadata.grant_id",
+                                match=models.MatchValue(value=grant_id)
+                            )
+                        ]
+                    )
+                }
+            )
+            
+            chain = (
+                {"context": retriever, "question": RunnablePassthrough()}  # TODO: question needs to be added to prompt
+                | self.prompt 
+                | self.llm
+            )
+            
+            # TODO: followup questions wil need to repass entire conversation through chain.
+            # TODO: question here does not matter at all yet
+            # Generate summary by passing empty string as query
+            # The retriever will still use the filter to get relevant chunks
+            
+            # since raw string the string will pass to everything in chain
+            response = chain.invoke("")
         state["context"] = context
         state["summary"] = response.content
         return state
@@ -297,11 +298,11 @@ class GrantSummaryPipeline:
         })
         return state
     
-    def run_agent(self, grant_id):
+    def run_agent(self, grant_id, context=None) -> str:
         result = self.agent.invoke({
             "messages": [],
             "grant_id": grant_id,
-            "context": None,
+            "context": context,
             "summary": "",
             "privacy_issues": []
         })

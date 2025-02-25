@@ -20,6 +20,7 @@ def get_required_env_var(var_name: str) -> str:
 def get_openai_api_key(): return get_required_env_var("OPENAI_API_KEY")
 def get_anthropic_api_key(): return get_required_env_var("ANTHROPIC_API_KEY")
 def get_airtable_api_key(): return get_required_env_var("AIRTABLE_API_KEY")
+def get_langchain_api_key(): return get_required_env_var("LANGCHAIN_API_KEY")
 
 # Airtable config getters
 def get_airtable_grants_base_id(): return get_required_env_var("AIRTABLE_GRANTS_BASE_ID")
@@ -32,6 +33,8 @@ def get_fund_id_mapping():
         os.getenv("AIRTABLE_EAIF_ID"): "EAIF",
         os.getenv("AIRTABLE_AWF_ID"): "AWF"
     }
+
+# os.environ["LANGCHAIN_TRACING_V2"] = "true"
 
 # Interactive API key entry (jupyter notebook)
 # os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter Your OpenAI API Key: ")
