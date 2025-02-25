@@ -60,23 +60,35 @@ class GrantEvaluationGenerator:
 
     def _sample_diverse_grants(self, grants: List[Document], num_examples: int = 15) -> List[Document]:
         """
-        Sample grants ensuring diversity across funds and other characteristics
+        Sample grants ensuring diversity across funds and other characteristics.
+        Always includes grant recysfnkO2fRgtn7s if present.
         """
-        # Group grants by fund
+        # First, try to find our specific grant
+        required_grant = None
+        remaining_grants = []
+        for grant in grants:
+            if grant.metadata.get("grant_id") == "recysfnkO2fRgtn7s":
+                required_grant = grant
+            else:
+                remaining_grants.append(grant)
+        
+        # Group remaining grants by fund
         fund_groups = {
             "LTFF": [],
             "EAIF": [],
             "AWF": []
         }
         
-        for grant in grants:
+        for grant in remaining_grants:
             fund = grant.metadata.get("fund_evaluating")  # Access through metadata
             if fund in fund_groups:
                 fund_groups[fund].append(grant)
         
         # Calculate samples per fund (roughly equal distribution)
-        samples_per_fund = num_examples // len(fund_groups)
-        remainder = num_examples % len(fund_groups)
+        # Reduce num_examples by 1 if we found our required grant
+        remaining_examples = num_examples - (1 if required_grant else 0)
+        samples_per_fund = remaining_examples // len(fund_groups)
+        remainder = remaining_examples % len(fund_groups)
         
         selected_grants = []
         for fund, fund_grants in fund_groups.items():
@@ -96,6 +108,10 @@ class GrantEvaluationGenerator:
             )
             selected_grants.extend(samples)
         
+        # Add our required grant if found
+        if required_grant:
+            selected_grants.append(required_grant)
+        
         return selected_grants
 
     def _generate_golden_summary(self, grant: Document) -> Tuple[str, Dict[str, bool], Dict[str, bool]]:
@@ -113,7 +129,7 @@ class GrantEvaluationGenerator:
         # Analyze structure compliance
         structure = {
             "starts_with_this_project": summary.startswith("This project"),
-            "has_two_sentences": len(re.split(r'[.!?]+', summary.strip())) == 2,
+            "has_two_sentences": summary.strip().count('.') == 2,
             "includes_methods": bool(re.search(r'by|through|using|with', summary)),
             "includes_metrics": bool(re.search(r'\d+', summary))
         }
