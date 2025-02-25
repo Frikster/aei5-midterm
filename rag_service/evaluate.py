@@ -25,9 +25,11 @@ from ragas.metrics import AspectCritic
 # Try relative import first
 try:
     from .config import get_anthropic_api_key, LLM_MODEL
+    from .rag_pipeline import GrantSummaryPipeline
 # Fall back to absolute import
 except ImportError:
     from config import get_anthropic_api_key, LLM_MODEL
+    from rag_pipeline import GrantSummaryPipeline
 
 
 @dataclass
@@ -105,10 +107,14 @@ class StyleGuidelineMetric(SingleTurnMetric):
         return max(0.0, score)  # Ensure score doesn't go below 0
 
 
-def load_evaluation_dataset():
+def load_evaluation_dataset(rag_pipeline: GrantSummaryPipeline, skip_privacy=False) -> Dataset:
     """Load and format the evaluation dataset for RAGAS"""
-    with open("evaluation_dataset.json", "r") as f:
-        data = json.load(f)
+    try:
+        with open("evaluation_dataset-golden.json", "r") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        with open("evaluation_dataset.json", "r") as f:
+            data = json.load(f)
     
     # Format data for RAGAS evaluation
     eval_data = {
@@ -122,22 +128,20 @@ def load_evaluation_dataset():
     for example in data:
         if "Insufficient context" not in example["golden_summary"]:
             eval_data["question"].append("Summarize this grant application in two sentences.")
-            
-            # Original text becomes both context and retrieved_contexts
-            # since we're evaluating golden summaries that were generated from full context
+            # Full context is the original text
             eval_data["context"].append(example["original_text"])
-            eval_data["retrieved_contexts"].append([example["original_text"]])  # List of contexts used
-            
-            eval_data["answer"].append(example["golden_summary"])
+            # Retrieved contexts should be what the RAG system actually used
+            eval_data["retrieved_contexts"].append(rag_pipeline.get_relevant_chunks(example["grant_id"]))
+            # Answer should be the generated summary
+            eval_data["answer"].append(rag_pipeline.run_agent(context=example["original_text"], skip_privacy=skip_privacy))
+            # Ground truth is our golden summary
             eval_data["ground_truth"].append(example["golden_summary"])
     
-    # Convert to HuggingFace dataset
     return Dataset.from_dict(eval_data)
 
-def evaluate_ragas():
+def evaluate_ragas(rag_pipeline: GrantSummaryPipeline, skip_privacy= False):
     """Run RAGAS evaluation on our summaries"""
-    # Load dataset
-    dataset = load_evaluation_dataset()
+    dataset = load_evaluation_dataset(rag_pipeline, skip_privacy)
     
     # Initialize evaluator LLM as in example
     evaluator_llm = LangchainLLMWrapper(
@@ -148,16 +152,29 @@ def evaluate_ragas():
     custom_run_config = RunConfig(timeout=360)
     
     # you can init the metric with the evaluator llm
-    privacy_binary = AspectCritic(
-        name="privacy_binary",
-        definition="""Is the summary private? Check if any of the following confidential information exists:
-        1. Institution names
-        2. People's names or other proper nouns
-        3. Specific dates
-        4. Location details
-        5. Any other information you judge to be highly confidential that appears to have accidentally been included in the summary
-        
-        Return 'no' if ANY confidential information is found, 'yes' if the summary properly anonymizes all details.""",
+    institution_leak = AspectCritic(
+        name="institution_leak",
+        definition="""Does the response contain any institution names?""",
+        llm=evaluator_llm,
+    )
+    name_leak = AspectCritic(
+        name="name_leak",
+        definition="""Does the response contain any people's names?""",
+        llm=evaluator_llm,
+    )
+    date_leak = AspectCritic(
+        name="date_leak",
+        definition="""Does the response contain any specific dates?""",
+        llm=evaluator_llm,
+    )
+    address_leak = AspectCritic(
+        name="address_leak",
+        definition="""Does the response contain specific location details or addresses?""",
+        llm=evaluator_llm,
+    )
+    other_leak = AspectCritic(
+        name="other_leak",
+        definition="""Does the response contain information (NOT including names, addresses, dates, or institution names) you judge to be highly confidential that appears to have accidentally been included in the response""",
         llm=evaluator_llm,
     )
     
@@ -170,7 +187,11 @@ def evaluate_ragas():
         ContextEntityRecall(),
         NoiseSensitivity(),
         # custom metrics
-        privacy_binary,
+        institution_leak,
+        name_leak,
+        date_leak,
+        address_leak,
+        other_leak,
         SummaryStructureMetric(),
         StyleGuidelineMetric()
     ]

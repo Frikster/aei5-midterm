@@ -9,7 +9,7 @@ from rag_service.synthetic_data import GrantEvaluationGenerator
 from rag_service.evaluate import evaluate_ragas
 
 @st.cache_resource
-def get_pipeline(vector_store_path):
+def get_pipeline(vector_store_path) -> GrantSummaryPipeline:
     """Create and cache the pipeline instance. 
     This will only run once per session and handle cleanup automatically."""
     pipeline = GrantSummaryPipeline(
@@ -117,28 +117,34 @@ def main():
                             st.error("No evaluation dataset found. Generate one first!")
                             return
                         
-                        # Run RAGAS evaluation
-                        ragas_results = evaluate_ragas()
-
-                        # Convert results to pandas DataFrame
+                        # Run RAGAS evaluations with and without privacy check
+                        ragas_results = evaluate_ragas(rag_pipeline=pipeline)
+                        ragas_results_without_privacy = evaluate_ragas(rag_pipeline=pipeline, skip_privacy=True)
+                        
+                        # Convert results to pandas DataFrames
                         results_df = ragas_results.to_pandas()
+                        results_no_privacy_df = ragas_results_without_privacy.to_pandas()
+                        
                         ragas_eval_output_path = Path(__file__).parent / "ragas_eval_output_path.json"
                         results_df.to_json(ragas_eval_output_path, orient="records", indent=2)
                         print(f"\nSaved detailed results to {ragas_eval_output_path}")
                         
-                        # Display RAGAS results
+                        ragas_eval_no_privacy_output_path = Path(__file__).parent / "ragas_eval_no_privacy_output_path.json"
+                        results_no_privacy_df.to_json(ragas_eval_no_privacy_output_path, orient="records", indent=2)
+                        print(f"\nSaved detailed results to {ragas_eval_no_privacy_output_path}")
+                        
+                        # Display results by fund
                         st.write("### RAGAS Evaluation Results")
-                        for metric_name, metric_value in ragas_results._repr_dict.items():
-                            st.metric(metric_name, f"{metric_value:.3f}")
+                        detailed_tabs = st.tabs(["With Privacy", "Without Privacy"])
+                                
+                        with detailed_tabs[0]:
+                            for metric_name, metric_value in ragas_results._repr_dict.items():
+                                st.metric(metric_name, f"{metric_value:.3f}")
                         
-                        # # Run custom evaluation
-                        # custom_results = evaluate_custom(pipeline)
+                        with detailed_tabs[1]:
+                            for metric_name, metric_value in ragas_results_without_privacy._repr_dict.items():
+                                st.metric(metric_name, f"{metric_value:.3f}")
                         
-                        # # Display custom results
-                        # st.write("### Custom Evaluation Results")
-                        # for metric, score in custom_results.items():
-                        #     st.metric(metric.replace("custom_", ""), f"{score:.2%}")
-                            
                     except Exception as e:
                         st.error(f"Error running evaluation: {str(e)}")
 

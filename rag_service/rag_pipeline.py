@@ -8,7 +8,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.schema.runnable import RunnablePassthrough
 from tqdm import tqdm
 from pathlib import Path
-from typing import TypedDict, Annotated
+from typing import TypedDict, Annotated, List
 from langgraph.graph import StateGraph, END
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -31,7 +31,7 @@ class PrivacyState(TypedDict):
     privacy_issues: list[str]
 
 class GrantSummaryPipeline:
-    def __init__(self, persist_dir: str = "vector_store", force_disable_check_same_thread: bool = False):
+    def __init__(self, persist_dir: str = "vector_store", force_disable_check_same_thread: bool = False):        
         # Initialize models
         self.llm = ChatAnthropic(
             model=LLM_MODEL,
@@ -298,16 +298,32 @@ class GrantSummaryPipeline:
         })
         return state
     
-    def run_agent(self, grant_id, context=None) -> str:
-        result = self.agent.invoke({
+    def run_agent(self, grant_id=None, context=None, skip_privacy=False) -> str:
+        state = {
             "messages": [],
             "grant_id": grant_id,
             "context": context,
             "summary": "",
             "privacy_issues": []
-        })
+        }        
+        result = self.generate_summary(state) if skip_privacy else self.agent.invoke(state)
         return result["summary"]
         
+    def get_relevant_chunks(self, grant_id: str) -> List[str]:
+        """Get all chunks relevant to a specific grant"""
+        chunks = self.vectorstore.similarity_search(
+            query="",  # Empty query since we're using filter to get all chunks
+            k=float("inf"),  # Get all matching chunks
+            filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="metadata.grant_id",
+                        match=models.MatchValue(value=grant_id)
+                    )
+                ]
+            )
+        )
+        return [chunk.page_content for chunk in chunks]
 
 def main():
     # Test the pipeline
@@ -325,7 +341,7 @@ def main():
     test_ids = ["recJYbsdzFWrtRioh", "reckdtWlsWmQ1QpcQ", "rec4wLvMmnhpBMFtg"]
     for grant_id in test_ids:
         print(f"\nGenerating summary for grant {grant_id}:")
-        summary = pipeline.generate_summary(grant_id)
+        summary = pipeline.run_agent(grant_id)
         print(summary)
 
 if __name__ == "__main__":
